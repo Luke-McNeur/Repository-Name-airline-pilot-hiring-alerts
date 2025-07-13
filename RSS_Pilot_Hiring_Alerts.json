@@ -1,0 +1,511 @@
+{
+  "name": "RSS Pilot Hiring Alerts",
+  "nodes": [
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "Review the rss feeds and look for valuable posts for someone tracking U.S.-based airline pilot hiring opportunities. Use the scoring system described to return a final score from 0 to 10. Only consider pilot-specific hiring. Ignore unrelated aviation roles or international-only announcements.",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=You are an assistant evaluating a batch of RSS feed articles for airline pilot hiring alerts. Your task is to:\n\nReview each article using only the title and contentSnippet.\nAssign an alertScore from 0 to 10 using the criteria below.\nFor testing, assign alertScore = 5 to every article without evaluating the content.\n\nReturn todaysAlerts: yes only if at least one article receives a score of 4 or higher.\n\nIf none qualify, return only:\ntodaysAlerts: no\n\nScoring Criteria:\n\n+4 points – if the article contains hiring language such as \"now hiring\", \"accepting applications\", \"pilot recruitment\", or \"first officer openings\"\n\n+2 points – if a specific U.S. airline is mentioned, such as Delta, United, American, Alaska, JetBlue, Spirit, SkyWest, Envoy\n\n+2 points – if a date or hiring timeline is mentioned, such as \"Fall 2025\", \"applications open this week\", or any deadline or timeframe\n\n+1 point – if the article is clearly relevant to the United States, such as mentioning U.S. cities, .com airline links, FAA, or U.S.-based carriers\n\n+1 point – if perks or bonuses are mentioned, such as sign-on bonus, relocation assistance, tuition reimbursement, cadet programs\n\n−5 points – if the article is mainly about unrelated roles (e.g. flight attendants, airport staff, customer service) or only pertains to international hiring\n\nIf one or more articles score 4 or more, return:\n\ntodaysAlerts: yes\nalertScore: [score]\nsource: [source]\ntitle: [title]\npubDate: [date]\ncontentSnippet: [snippet]\nlink: [url]\n\nRepeat this block for each qualifying article.",
+          "maxIterations": 10
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2,
+      "position": [
+        80,
+        640
+      ],
+      "id": "dea4a34f-1f89-4052-a9c2-c953badd9b52",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"todaysAlerts\":\"yes\",\n  \"alertScore\":\"7\",\n  \"title\": \"Delta Airlines Now Hiring Pilots for Fall 2025 Training Program\",\n  \"pubDate\": \"Fri, 14 Jun 2025 07:35:00 GMT\",\n  \"contentSnippet\": \"Delta Airlines is accepting applications for its Fall 2025 pilot class. Successful candidates will receive a $10,000 sign-on bonus and relocation assistance. Apply now on the Delta careers site.\",\n  \"link\": \"https://www.delta.com/careers/pilot-hiring-fall-2025\"\n}\n"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        280,
+        860
+      ],
+      "id": "f21859fb-258e-4778-bd1c-d990adb04c98",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "17f5ab81-9f84-4487-8adc-30268188d127",
+              "leftValue": "={{ $json.output.todaysAlerts }}",
+              "rightValue": "yes",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        400,
+        640
+      ],
+      "id": "354e0fb1-ba4b-4669-b042-ddf893c54429",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "jsCode": "const alerts = items.map(item => {\n  const output = item.json.output;\n\n  if (!output) {\n    return null;\n  }\n\n  const date = new Date(output.pubDate || new Date());\n  const friendlyPubDate = date.toLocaleString('en-US', {\n    year: 'numeric',\n    month: 'long',\n    day: 'numeric',\n    hour: 'numeric',\n    minute: '2-digit',\n    hour12: true,\n    timeZone: 'America/New_York'\n  });\n\n  return {\n    title: output.title || '',\n    pubDate: friendlyPubDate,\n    contentSnippet: output.contentSnippet || '',\n    link: output.link || '#',\n    score: output.alertScore || 0 // <-- needed for row highlighting\n  };\n}).filter(Boolean);\n\nconst htmlRows = alerts.map((alert, index) => {\n  let bgColor = index % 2 === 0 ? '#f9f9f9' : '#eeeeee';\n\n//  if (alert.score >= 9) {\n//    bgColor = '#d4edda'; // green\n//  } else if (alert.score >= 7) {\n//    bgColor = '#fff3cd'; // yellow\n//  }\n\n  return `\n    <tr>\n      <td valign=\"top\" style=\"border: 1px solid #ccc; background-color: ${bgColor};\">${alert.title}</td>\n      <td valign=\"top\" style=\"border: 1px solid #ccc; background-color: ${bgColor};\">${alert.pubDate}</td>\n      <td valign=\"top\" style=\"border: 1px solid #ccc; background-color: ${bgColor};\">${alert.contentSnippet}</td>\n      <td valign=\"top\" style=\"border: 1px solid #ccc; background-color: ${bgColor};\"><a class=\"link\" href=\"${alert.link}\">View</a></td>\n    </tr>\n  `;\n}).join('');\n\nreturn [{ json: { htmlRows } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        620,
+        640
+      ],
+      "id": "7985c4e8-4025-4d8d-abfd-45138b28ae92",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "sendTo": "luke.c.mcneur@gmail.com, jtmcneur@gmail.com",
+        "subject": "Airline Hiring Notifications [Neurvana]",
+        "message": "=<style>\n  body {\n    font-family: Arial, sans-serif;\n    background-color: #f5f5f5;\n    padding: 20px;\n    color: #333;\n  }\n\n  .container {\n    max-width: 700px;\n    margin: auto;\n    background-color: #ffffff;\n    padding: 20px;\n    border-radius: 8px;\n    box-shadow: 0 2px 6px rgba(0,0,0,0.1);\n  }\n\n  .intro {\n    margin-top: 0;\n  }\n\n  table.alerts {\n    width: 100%;\n    border-collapse: collapse;\n    margin-top: 20px;\n    border: 1px solid #ccc;\n  }\n\n  table.alerts th {\n    background-color: #004085;\n    color: #ffffff;\n    text-align: left;\n    padding: 12px;\n    border: 1px solid #ccc;\n  }\n\n  table.alerts td {\n    padding: 10px;\n    border: 1px solid #ccc;\n    vertical-align: top;\n  }\n\n.score-high {\n  background-color: #d4edda; /* light green */\n}\n\n.score-medium {\n  background-color: #fff3cd; /* light yellow */\n}\n  a.link {\n    color: #1a73e8;\n    text-decoration: none;\n  }\n</style>\n\n<div class=\"container\">\n  <h2 class=\"intro\">Hello,</h2>\n  <p>Here are the latest airline hiring alerts that may be relevant and actionable:</p>\n\n  <table class=\"alerts\">\n    <thead>\n      <tr>\n        <th style=\"background-color: #004085; color: #ffffff; text-align: left; padding: 12px; border: 1px solid #ccc;\">Title</th>\n        <th style=\"background-color: #004085; color: #ffffff; text-align: left; padding: 12px; border: 1px solid #ccc;\">Published</th>\n        <th style=\"background-color: #004085; color: #ffffff; text-align: left; padding: 12px; border: 1px solid #ccc;\">Summary</th>\n        <th style=\"background-color: #004085; color: #ffffff; text-align: left; padding: 12px; border: 1px solid #ccc;\">Link</th>\n      </tr>\n    </thead>\n    <tbody>\n      {{ $json.htmlRows }}\n    </tbody>\n  </table>\n\n  <p style=\"margin-top: 30px;\">– Your Neurvana Alert Agent</p>\n</div>\n",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        780,
+        640
+      ],
+      "id": "eb54386b-96ce-4433-a2e1-dce76ba9db22",
+      "name": "Gmail",
+      "webhookId": "0d69275b-a547-452f-b140-00eb6bc3d564",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "aXAtEfweFCIWuQ0y",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -900,
+        720
+      ],
+      "id": "a74c21e6-f139-40f4-9f33-ec47c92f3d12",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-3.5-turbo",
+          "mode": "list",
+          "cachedResultName": "gpt-3.5-turbo"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        40,
+        860
+      ],
+      "id": "f9cf028b-7387-44a0-9d2a-214c168325f8",
+      "name": "OpenAI",
+      "credentials": {
+        "openAiApi": {
+          "id": "4sYXbHRvWghOasnX",
+          "name": "OpenAi account - n8n - Neurvana"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://www.google.com/alerts/feeds/14661532088978691670/6375579449863354933",
+        "options": {}
+      },
+      "id": "417d6df0-4f06-4d96-a2c8-ba230f41db4c",
+      "name": "Google Alerts RSS",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "position": [
+        -600,
+        340
+      ],
+      "typeVersion": 1,
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://www.faa.gov/newsroom/press_releases/rss",
+        "options": {}
+      },
+      "id": "8c3ad589-8d31-4c2c-a693-d89b602d0e25",
+      "name": "FAA Press Releases RSS",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "position": [
+        -600,
+        540
+      ],
+      "typeVersion": 1,
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://www.aopa.org/rss",
+        "options": {}
+      },
+      "id": "3996d2bf-8ded-4fba-9a74-dd258d3edfc5",
+      "name": "AOPA RSS",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "position": [
+        -600,
+        740
+      ],
+      "typeVersion": 1,
+      "retryOnFail": true,
+      "waitBetweenTries": 1000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://www.reddit.com/r/aviationcareers/.rss",
+        "options": {}
+      },
+      "id": "a78738f1-26e2-41c0-af0b-1f4e32e55332",
+      "name": "Reddit Aviation Careers RSS",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "position": [
+        -600,
+        940
+      ],
+      "typeVersion": 1,
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "try {\n  const allItems = items;\n  const sources = {\n    google: [],\n    faa: [],\n    aopa: [],\n    reddit: []\n  };\n\n  for (const item of allItems) {\n    const url = item.json.link || item.json.url || '';\n\n    if (url.includes('google.com') && sources.google.length < 5) {\n      sources.google.push(item);\n    } else if (url.includes('faa.gov') && sources.faa.length < 5) {\n      sources.faa.push(item);\n    } else if (url.includes('aopa.org') && sources.aopa.length < 5) {\n      sources.aopa.push(item);\n    } else if (url.includes('reddit.com') && sources.reddit.length < 5) {\n      sources.reddit.push(item);\n    }\n  }\n\n  // Optional: Add a source tag for downstream use\n  const withSourceTags = [\n    ...sources.google.map(i => ({ json: { ...i.json, source: 'google' } })),\n    ...sources.faa.map(i => ({ json: { ...i.json, source: 'faa' } })),\n    ...sources.aopa.map(i => ({ json: { ...i.json, source: 'aopa' } })),\n    ...sources.reddit.map(i => ({ json: { ...i.json, source: 'reddit' } }))\n  ];\n\n  return withSourceTags;\n\n} catch (error) {\n  console.error('Error limiting RSS items:', error);\n  return items.slice(0, 20);\n}\n"
+      },
+      "id": "31dbdca4-a65a-4ff2-a966-42589bfe6964",
+      "name": "Limit RSS Items",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        -240,
+        640
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "numberInputs": 4
+      },
+      "id": "b269795c-4196-4ee1-8a81-8c35b45bd27d",
+      "name": "Merge RSS Feeds",
+      "type": "n8n-nodes-base.merge",
+      "position": [
+        -380,
+        620
+      ],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "jsCode": "try {\n  const rssItems = items;\n  let formattedData = 'RSS FEED ARTICLES FOR ANALYSIS:\\n\\n';\n\n  for (let i = 0; i < rssItems.length; i++) {\n    const item = rssItems[i].json;\n    \n    formattedData += `Article ${i + 1}:\\n`;\n    formattedData += `Source: ${item.source || 'Unknown'}\\n`;\n    formattedData += `Title: ${item.title || 'No title'}\\n`;\n    formattedData += `Published: ${item.pubDate || 'No date'}\\n`;\n    formattedData += `Snippet: ${item.contentSnippet || 'No snippet'}\\n`;\n    formattedData += `Link: ${item.link || 'No link'}\\n\\n`;\n  }\n\n  return [{\n    json: {\n      chatInput: formattedData,\n      totalArticles: rssItems.length\n    }\n  }];\n} catch (error) {\n  console.error('Error preparing RSS data:', error);\n  return [{\n    json: {\n      chatInput: 'Error processing RSS data',\n      error: error.message\n    }\n  }];\n}\n"
+      },
+      "id": "49239851-575d-4f4d-a607-c7d058b9d106",
+      "name": "Prepare RSS Data",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        -80,
+        640
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -900,
+        580
+      ],
+      "id": "ab7de4be-15fa-45d8-8e7c-29b729bb6b52",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "content": "8am timer",
+        "height": 80,
+        "width": 150
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -920,
+        480
+      ],
+      "id": "72313661-3d86-4ee3-8bf2-6e33699250a1",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "scan for specific key words in google alert RSS, FAA RSS feed,vAOPA RSS, and Reddit Aviation Careers RSS",
+        "height": 140,
+        "width": 200,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -440,
+        300
+      ],
+      "id": "4078ec84-c30c-4663-8b58-3473707e9b59",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "Review the rss feeds and look for valuable posts for someone tracking U.S.-based airline pilot hiring opportunities. Use the scoring system described to return a final score from 0 to 10.\n\nOnly pass items scored 6 or above to email John & Luke.",
+        "width": 340,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        40,
+        440
+      ],
+      "id": "c312a72b-dcb0-4078-b749-33a99dbf2800",
+      "name": "Sticky Note2"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Gmail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Reddit Aviation Careers RSS",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AOPA RSS",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "FAA Press Releases RSS",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Google Alerts RSS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Alerts RSS": {
+      "main": [
+        [
+          {
+            "node": "Merge RSS Feeds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FAA Press Releases RSS": {
+      "main": [
+        [
+          {
+            "node": "Merge RSS Feeds",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "AOPA RSS": {
+      "main": [
+        [
+          {
+            "node": "Merge RSS Feeds",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Reddit Aviation Careers RSS": {
+      "main": [
+        [
+          {
+            "node": "Merge RSS Feeds",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Merge RSS Feeds": {
+      "main": [
+        [
+          {
+            "node": "Limit RSS Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limit RSS Items": {
+      "main": [
+        [
+          {
+            "node": "Prepare RSS Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare RSS Data": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Google Alerts RSS",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "FAA Press Releases RSS",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AOPA RSS",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Reddit Aviation Careers RSS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1b97af3e-05ce-432f-934d-badf3f59689e",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "536da3f879a4021c2e665004b205ac3248650d186016a9e0b3d1c8661186ceb0"
+  },
+  "id": "fLSPav8VtIN6RTF2",
+  "tags": []
+}
